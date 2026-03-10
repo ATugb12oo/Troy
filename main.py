@@ -523,3 +523,78 @@ class SimulatedSlot:
 
 class TroySimulator:
     """In-memory simulator for YugeAI / Troy logic (big-league grabs, deals, covfefe, vault)."""
+
+    def __init__(self, config: Optional[TroyConfig] = None):
+        self.config = config or TroyConfig()
+        self._grabs: Dict[int, GrabRecord] = {}
+        self._deals: Dict[int, DealSlot] = {}
+        self._slots: Dict[int, BatchSlot] = {}
+        self._claim_rewards: Dict[int, int] = {}
+        self._claim_count: Dict[str, int] = {}
+        self._authorized_keepers: Dict[str, bool] = {self.config.commander: True}
+        self._covfefe_store: Dict[bytes, bytes] = {}
+        self._covfefe_updated_block: Dict[bytes, int] = {}
+        self._epoch_snapshots: Dict[int, EpochSnapshot] = {}
+        self._epoch_grab_count: Dict[int, int] = {}
+        self._next_grab_id: int = 0
+        self._next_deal_id: int = 0
+        self._next_slot_index: int = 0
+        self._total_swept_wei: int = 0
+        self._vault_balance_wei: int = 0
+        self._guard_paused: bool = False
+        self._reentrancy_lock: int = 0
+        self._last_oracle_block: int = 0
+        self._current_epoch: int = 0
+        self._block_number: int = 0
+        self._timestamp: int = 0
+
+    def set_block_time(self, block_number: int, timestamp: int) -> None:
+        self._block_number = block_number
+        self._timestamp = timestamp
+        self._current_epoch = epoch_at(self.config.genesis_time, timestamp)
+
+    def log_grab(self, intensity_bps: int, caller: str) -> int:
+        if not self._authorized_keepers.get(caller, False):
+            raise UnauthorizedError()
+        if self._guard_paused:
+            raise GuardPausedError()
+        if intensity_bps < YUGEAI_MIN_GRAB_BPS or intensity_bps > YUGEAI_MAX_GRAB_BPS:
+            raise BadInputError()
+        epoch = epoch_at(self.config.genesis_time, self._timestamp)
+        epoch_start_slot = epoch * YUGEAI_MAX_GRABS_PER_EPOCH
+        if self._next_grab_id >= epoch_start_slot + YUGEAI_MAX_GRABS_PER_EPOCH:
+            raise LimitReachedError()
+        grab_id = self._next_grab_id
+        self._next_grab_id += 1
+        rec = GrabRecord(
+            intensity_bps=clamp_intensity_bps(intensity_bps),
+            logged_at=self._timestamp,
+            epoch_id=epoch,
+            finalized=True,
+        )
+        self._grabs[grab_id] = rec
+        self._epoch_grab_count[epoch] = self._epoch_grab_count.get(epoch, 0) + 1
+        return grab_id
+
+    def get_grab(self, grab_id: int) -> Optional[GrabRecord]:
+        return self._grabs.get(grab_id)
+
+    def open_deal(self, party: str, amount_wei: int, caller: str) -> int:
+        if caller != self.config.deal_maker:
+            raise NotDealMakerError()
+        if self._guard_paused or self._reentrancy_lock != 0:
+            raise GuardPausedError() if self._guard_paused else ReentrantError()
+        if not party or amount_wei == 0:
+            raise ZeroAmountError()
+        if self._next_deal_id >= YUGEAI_MAX_DEAL_SLOTS:
+            raise LimitReachedError()
+        deal_id = self._next_deal_id
+        self._next_deal_id += 1
+        self._deals[deal_id] = DealSlot(
+            amount_wei=amount_wei,
+            created_at_block=self._block_number,
+            closed_at_block=0,
+            party=party,
+            active=True,
+            closed=False,
+        )
