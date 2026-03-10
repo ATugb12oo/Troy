@@ -1273,3 +1273,66 @@ def _add_extra_commands(sub: Any) -> None:
     p_srv.add_argument("--port", type=int, default=8765)
     p_srv.set_defaults(func=lambda a: run_server(a.host, a.port) or 0)
 
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Troy — YugeAI clawbot-style app")
+    sub = parser.add_subparsers(dest="command", required=True)
+    # simulate
+    p_sim = sub.add_parser("simulate", help="Run in-memory simulation")
+    p_sim.add_argument("--genesis", type=int, help="Genesis timestamp")
+    p_sim.add_argument("--block", type=int, help="Current block number")
+    p_sim.add_argument("--timestamp", type=int, help="Current timestamp")
+    p_sim.add_argument("--grabs", type=int, default=0, help="Number of grabs to log")
+    p_sim.add_argument("--intensity-bps", type=int, help="Intensity in bps for grabs")
+    p_sim.add_argument("--deals", type=int, default=0, help="Number of deals to open")
+    p_sim.add_argument("--party", type=str, help="Deal party address")
+    p_sim.add_argument("--deal-amount", type=int, help="Deal amount in wei")
+    p_sim.set_defaults(func=cmd_simulate)
+    # encode
+    p_enc = sub.add_parser("encode", help="Encode calldata")
+    p_enc.add_argument("func", type=str, help="Function name")
+    p_enc.add_argument("--intensity-bps", type=int)
+    p_enc.add_argument("--party", type=str)
+    p_enc.add_argument("--amount-wei", type=str)
+    p_enc.add_argument("--deal-id", type=int)
+    p_enc.add_argument("--slot-index", type=int)
+    p_enc.add_argument("--variant-id", type=int)
+    p_enc.add_argument("--band-bps", type=int)
+    p_enc.add_argument("--claim-index", type=int)
+    p_enc.add_argument("--reward-wei", type=str)
+    p_enc.add_argument("--to", type=str)
+    p_enc.add_argument("--paused", type=str)
+    p_enc.add_argument("--keeper", type=str)
+    p_enc.add_argument("--authorized", type=str)
+    p_enc.add_argument("--epoch-id", type=int)
+    p_enc.set_defaults(func=cmd_encode)
+    # epoch
+    p_ep = sub.add_parser("epoch", help="Compute epoch at timestamp")
+    p_ep.add_argument("--genesis", type=int, required=True)
+    p_ep.add_argument("--timestamp", type=int, required=True)
+    p_ep.set_defaults(func=cmd_epoch)
+    # tier
+    p_tier = sub.add_parser("tier", help="Tier from intensity bps")
+    p_tier.add_argument("--intensity-bps", type=int, required=True)
+    p_tier.set_defaults(func=cmd_tier)
+    # config
+    p_cfg = sub.add_parser("config", help="Show config")
+    p_cfg.add_argument("--genesis", type=int)
+    p_cfg.add_argument("--env", action="store_true", help="Output as env vars")
+    p_cfg.set_defaults(func=cmd_config)
+    # constants
+    p_const = sub.add_parser("constants", help="Show constants summary")
+    p_const.set_defaults(func=cmd_constants)
+    # dump, load, validate, serve
+    _add_extra_commands(sub)
+    # global
+    parser.add_argument("-v", "--verbose", action="store_true")
+    args = parser.parse_args()
+    _setup_logging(args.verbose)
+    if args.command == "serve":
+        return args.func(args)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
