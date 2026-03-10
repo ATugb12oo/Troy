@@ -673,3 +673,78 @@ class TroySimulator:
         self._claim_rewards[claim_index] = reward_wei
 
     def claim_big_league(self, claim_index: int, claimant: str) -> int:
+        if self._guard_paused:
+            raise GuardPausedError()
+        if self._reentrancy_lock != 0:
+            raise ReentrantError()
+        reward = self._claim_rewards.get(claim_index, 0)
+        if reward == 0:
+            raise InvalidGrabIdError()
+        self._claim_rewards[claim_index] = 0
+        self._claim_count[claimant] = self._claim_count.get(claimant, 0) + 1
+        return reward
+
+    def sweep_treasury(self, to: str, amount_wei: int, caller: str) -> None:
+        if caller != self.config.treasury:
+            raise NotTreasuryError()
+        if not to or amount_wei == 0:
+            raise ZeroAmountError()
+        if self._total_swept_wei + amount_wei > self.config.sweep_cap_wei:
+            raise SweepOverCapError()
+        if self._reentrancy_lock != 0:
+            raise ReentrantError()
+        self._total_swept_wei += amount_wei
+
+    def deposit_vault(self, amount_wei: int, caller: str) -> None:
+        if amount_wei == 0:
+            raise ZeroAmountError()
+        if self._guard_paused or self._reentrancy_lock != 0:
+            raise GuardPausedError() if self._guard_paused else ReentrantError()
+        self._vault_balance_wei += amount_wei
+
+    def withdraw_vault(self, to: str, amount_wei: int, caller: str) -> None:
+        if caller != self.config.commander:
+            raise NotCommanderError()
+        if not to or amount_wei == 0:
+            raise ZeroAmountError()
+        if amount_wei > self._vault_balance_wei:
+            raise SweepOverCapError()
+        if self._reentrancy_lock != 0:
+            raise ReentrantError()
+        self._vault_balance_wei -= amount_wei
+
+    def set_guard_paused(self, paused: bool, caller: str) -> None:
+        if caller != self.config.commander:
+            raise NotCommanderError()
+        self._guard_paused = paused
+
+    def set_keeper_authorization(self, keeper: str, authorized: bool, caller: str) -> None:
+        if caller != self.config.commander:
+            raise NotCommanderError()
+        if not keeper:
+            raise BadInputError()
+        self._authorized_keepers[keeper] = authorized
+
+    def record_epoch_snapshot(self, epoch_id: int, caller: str) -> None:
+        if caller != self.config.commander:
+            raise NotCommanderError()
+        if epoch_id >= (self._timestamp - self.config.genesis_time) // YUGEAI_EPOCH_DURATION_SECS:
+            raise BadInputError()
+        if self._epoch_snapshots.get(epoch_id) and self._epoch_snapshots[epoch_id].recorded:
+            raise SlotAlreadySealedError()
+        start_slot = epoch_id * YUGEAI_MAX_GRABS_PER_EPOCH
+        end_slot = start_slot + YUGEAI_MAX_GRABS_PER_EPOCH
+        total_grabs = 0
+        sum_bps = 0
+        for gid in range(start_slot, min(end_slot, self._next_grab_id)):
+            r = self._grabs.get(gid)
+            if r and r.logged_at != 0:
+                total_grabs += 1
+                sum_bps += r.intensity_bps
+        self._epoch_snapshots[epoch_id] = EpochSnapshot(
+            recorded_at_block=self._block_number,
+            total_grabs=total_grabs,
+            sum_intensity_bps=sum_bps,
+            recorded=True,
+        )
+
