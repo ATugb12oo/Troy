@@ -1123,3 +1123,78 @@ def run_server(host: str = "127.0.0.1", port: int = 8765) -> None:
     @app.route("/encode/<func>", methods=["POST"])
     def encode_api(func: str):
         j = request.get_json() or {}
+        try:
+            if func == "logGrab":
+                out = encode_log_grab(int(j.get("intensityBps", 0)))
+            elif func == "openDeal":
+                out = encode_open_deal(j.get("party", "0x0"), int(j.get("amountWei", 0)))
+            elif func == "closeDeal":
+                out = encode_close_deal(int(j.get("dealId", 0)))
+            elif func == "claimBigLeague":
+                out = encode_claim_big_league(int(j.get("claimIndex", 0)))
+            else:
+                return jsonify({"error": "unknown function"}), 400
+            return jsonify({"calldata": "0x" + out.hex()})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/simulate/logGrab", methods=["POST"])
+    def sim_log_grab():
+        j = request.get_json() or {}
+        intensity = int(j.get("intensityBps", 5000))
+        caller = j.get("caller", sim.config.commander)
+        try:
+            gid = sim.log_grab(intensity, caller)
+            return jsonify({"grabId": gid})
+        except TroyError as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/simulate/openDeal", methods=["POST"])
+    def sim_open_deal():
+        j = request.get_json() or {}
+        party = j.get("party", sim.config.treasury)
+        amount = int(j.get("amountWei", 0))
+        try:
+            did = sim.open_deal(party, amount, sim.config.deal_maker)
+            return jsonify({"dealId": did})
+        except TroyError as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/epoch")
+    def epoch_info():
+        genesis = int(request.args.get("genesis", sim.config.genesis_time or 0))
+        ts = int(request.args.get("timestamp", sim._timestamp))
+        e = epoch_at(genesis, ts)
+        end_ts = epoch_end_time(genesis, e)
+        return jsonify({"epochId": e, "epochEndTimestamp": end_ts})
+
+    @app.route("/tier/<int:bps>")
+    def tier_info(bps: int):
+        t = tier_from_intensity(bps)
+        win = is_winning_intensity(bps)
+        return jsonify({"tier": t, "winning": win})
+
+    logging.info("Troy API on http://%s:%s", host, port)
+    app.run(host=host, port=port, debug=False, use_reloader=False)
+
+
+# -----------------------------------------------------------------------------
+# Extra CLI commands (dump, load, validate, server)
+# -----------------------------------------------------------------------------
+
+def bps_to_wei_safe(wei_total: int, bps: int) -> int:
+    """Compute (wei_total * bps) / 10000; avoid overflow by using int."""
+    return (wei_total * bps) // YUGEAI_BPS
+
+
+def max_golden_reward_from_vault(vault_balance_wei: int) -> int:
+    """Max golden epoch reward from vault at YUGEAI_GOLDEN_EPOCH_REWARD_BPS."""
+    return bps_to_wei(vault_balance_wei, YUGEAI_GOLDEN_EPOCH_REWARD_BPS)
+
+
+def remaining_sweep_cap(total_swept_wei: int, sweep_cap_wei: int) -> int:
+    """Remaining sweep capacity."""
+    return max(0, sweep_cap_wei - total_swept_wei)
+
+
+def epoch_start_time(genesis_time: int, epoch_id: int, duration_secs: int = YUGEAI_EPOCH_DURATION_SECS) -> int:
