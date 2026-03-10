@@ -823,3 +823,78 @@ def cmd_simulate(args: argparse.Namespace) -> int:
 
 def cmd_encode(args: argparse.Namespace) -> int:
     """Encode calldata for a function."""
+    out: Optional[bytes] = None
+    if args.func == "logGrab":
+        out = encode_log_grab(int(args.intensity_bps or 0))
+    elif args.func == "openDeal":
+        out = encode_open_deal(args.party or "0x0000000000000000000000000000000000000000", int(args.amount_wei or 0))
+    elif args.func == "closeDeal":
+        out = encode_close_deal(int(args.deal_id or 0))
+    elif args.func == "sealSlot":
+        out = encode_seal_slot(int(args.slot_index or 0), int(args.variant_id or 0), int(args.band_bps or 0))
+    elif args.func == "claimBigLeague":
+        out = encode_claim_big_league(int(args.claim_index or 0))
+    elif args.func == "sweepTreasury":
+        out = encode_sweep_treasury(args.to or "0x0000000000000000000000000000000000000000", int(args.amount_wei or 0))
+    elif args.func == "setGuardPaused":
+        out = encode_set_guard_paused(args.paused.lower() in ("true", "1", "yes"))
+    elif args.func == "setClaimReward":
+        out = encode_set_claim_reward(int(args.claim_index or 0), int(args.reward_wei or 0))
+    elif args.func == "setKeeperAuthorization":
+        out = encode_set_keeper_authorization(args.keeper or "0x0000000000000000000000000000000000000000", args.authorized.lower() in ("true", "1", "yes"))
+    elif args.func == "recordEpochSnapshot":
+        out = encode_record_epoch_snapshot(int(args.epoch_id or 0))
+    else:
+        print("Unknown function", args.func, file=sys.stderr)
+        return 1
+    print("0x" + out.hex())
+    return 0
+
+
+def cmd_epoch(args: argparse.Namespace) -> int:
+    """Compute epoch at timestamp."""
+    genesis = int(args.genesis or 0)
+    ts = int(args.timestamp or 0)
+    e = epoch_at(genesis, ts)
+    end_ts = epoch_end_time(genesis, e)
+    print(json.dumps({"epochId": e, "epochEndTimestamp": end_ts}))
+    return 0
+
+
+def cmd_tier(args: argparse.Namespace) -> int:
+    """Compute tier from intensity bps."""
+    bps = int(args.intensity_bps or 0)
+    t = tier_from_intensity(bps)
+    win = is_winning_intensity(bps)
+    print(json.dumps({"tier": t, "winning": win}))
+    return 0
+
+
+def cmd_config(args: argparse.Namespace) -> int:
+    """Print config as JSON or env."""
+    cfg = TroyConfig()
+    if args.genesis:
+        cfg = cfg.with_genesis(int(args.genesis))
+    if args.env:
+        for k, v in cfg.to_env_dict().items():
+            print(f"{k}={v}")
+    else:
+        print(json.dumps(dataclasses.asdict(cfg), indent=2))
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Troy — YugeAI clawbot-style app")
+    sub = parser.add_subparsers(dest="command", required=True)
+    # simulate
+    p_sim = sub.add_parser("simulate", help="Run in-memory simulation")
+    p_sim.add_argument("--genesis", type=int, help="Genesis timestamp")
+    p_sim.add_argument("--block", type=int, help="Current block number")
+    p_sim.add_argument("--timestamp", type=int, help="Current timestamp")
+    p_sim.add_argument("--grabs", type=int, default=0, help="Number of grabs to log")
+    p_sim.add_argument("--intensity-bps", type=int, help="Intensity in bps for grabs")
+    p_sim.add_argument("--deals", type=int, default=0, help="Number of deals to open")
+    p_sim.add_argument("--party", type=str, help="Deal party address")
+    p_sim.add_argument("--deal-amount", type=int, help="Deal amount in wei")
+    p_sim.set_defaults(func=cmd_simulate)
+    # encode
