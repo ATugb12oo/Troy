@@ -973,3 +973,78 @@ def validate_grab_id(grab_id: int, next_grab_id: int) -> bool:
 
 def validate_deal_id(deal_id: int, next_deal_id: int) -> bool:
     return 0 <= deal_id < next_deal_id
+
+
+# -----------------------------------------------------------------------------
+# State dump / load (for persistence in dev)
+# -----------------------------------------------------------------------------
+
+def dump_simulator_state(sim: TroySimulator) -> Dict[str, Any]:
+    """Export simulator state to a JSON-serializable dict."""
+    grabs = {str(k): v.to_dict() for k, v in sim._grabs.items()}
+    deals = {str(k): v.to_dict() for k, v in sim._deals.items()}
+    slots = {str(k): v.to_dict() for k, v in sim._slots.items()}
+    snapshots = {str(k): v.to_dict() for k, v in sim._epoch_snapshots.items()}
+    covfefe = {k.hex(): v.hex() for k, v in sim._covfefe_store.items()}
+    return {
+        "config": dataclasses.asdict(sim.config),
+        "nextGrabId": sim._next_grab_id,
+        "nextDealId": sim._next_deal_id,
+        "nextSlotIndex": sim._next_slot_index,
+        "totalSweptWei": str(sim._total_swept_wei),
+        "vaultBalanceWei": str(sim._vault_balance_wei),
+        "guardPaused": sim._guard_paused,
+        "lastOracleBlock": sim._last_oracle_block,
+        "currentEpoch": sim._current_epoch,
+        "blockNumber": sim._block_number,
+        "timestamp": sim._timestamp,
+        "grabs": grabs,
+        "deals": deals,
+        "slots": slots,
+        "epochSnapshots": snapshots,
+        "claimRewards": {str(k): str(v) for k, v in sim._claim_rewards.items()},
+        "claimCount": dict(sim._claim_count),
+        "authorizedKeepers": dict(sim._authorized_keepers),
+        "covfefeStore": covfefe,
+    }
+
+
+def load_simulator_state(data: Dict[str, Any]) -> TroySimulator:
+    """Load simulator from a previously dumped state dict."""
+    cfg = TroyConfig(**data["config"]) if "config" in data else TroyConfig()
+    sim = TroySimulator(cfg)
+    sim._next_grab_id = int(data.get("nextGrabId", 0))
+    sim._next_deal_id = int(data.get("nextDealId", 0))
+    sim._next_slot_index = int(data.get("nextSlotIndex", 0))
+    sim._total_swept_wei = int(data.get("totalSweptWei", "0"))
+    sim._vault_balance_wei = int(data.get("vaultBalanceWei", "0"))
+    sim._guard_paused = bool(data.get("guardPaused", False))
+    sim._last_oracle_block = int(data.get("lastOracleBlock", 0))
+    sim._current_epoch = int(data.get("currentEpoch", 0))
+    sim._block_number = int(data.get("blockNumber", 0))
+    sim._timestamp = int(data.get("timestamp", 0))
+    for k, v in data.get("grabs", {}).items():
+        sim._grabs[int(k)] = GrabRecord.from_dict(v)
+    for k, v in data.get("deals", {}).items():
+        sim._deals[int(k)] = DealSlot.from_dict(v)
+    for k, v in data.get("slots", {}).items():
+        sim._slots[int(k)] = BatchSlot.from_dict(v)
+    for k, v in data.get("epochSnapshots", {}).items():
+        sim._epoch_snapshots[int(k)] = EpochSnapshot.from_dict(v)
+    for k, v in data.get("claimRewards", {}).items():
+        sim._claim_rewards[int(k)] = int(v)
+    sim._claim_count = dict(data.get("claimCount", {}))
+    sim._authorized_keepers = dict(data.get("authorizedKeepers", {sim.config.commander: True}))
+    for k, v in data.get("covfefeStore", {}).items():
+        sim._covfefe_store[bytes.fromhex(k)] = bytes.fromhex(v)
+    return sim
+
+
+def cmd_dump(args: argparse.Namespace) -> int:
+    """Dump simulator state to JSON (after running simulate with same params)."""
+    sim = TroySimulator()
+    if args.genesis:
+        sim.config = sim.config.with_genesis(args.genesis)
+    sim.set_block_time(args.block or 0, args.timestamp or sim.config.genesis_time or 1000)
+    for i in range(args.grabs or 0):
+        try:
