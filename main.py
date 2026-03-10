@@ -748,3 +748,78 @@ class TroySimulator:
             recorded=True,
         )
 
+    def get_epoch_snapshot(self, epoch_id: int) -> Optional[EpochSnapshot]:
+        return self._epoch_snapshots.get(epoch_id)
+
+    def total_swept_wei(self) -> int:
+        return self._total_swept_wei
+
+    def vault_balance_wei(self) -> int:
+        return self._vault_balance_wei
+
+    def claim_count(self, account: str) -> int:
+        return self._claim_count.get(account, 0)
+
+    def is_keeper_authorized(self, account: str) -> bool:
+        return self._authorized_keepers.get(account, False)
+
+    def next_grab_id(self) -> int:
+        return self._next_grab_id
+
+    def next_deal_id(self) -> int:
+        return self._next_deal_id
+
+    def next_slot_index(self) -> int:
+        return self._next_slot_index
+
+    def grab_tier(self, grab_id: int) -> int:
+        r = self._grabs.get(grab_id)
+        if not r or r.logged_at == 0:
+            return 0
+        return tier_from_intensity(r.intensity_bps)
+
+    def is_winning_grab(self, grab_id: int) -> bool:
+        r = self._grabs.get(grab_id)
+        return bool(r and r.logged_at != 0 and is_winning_intensity(r.intensity_bps))
+
+
+# -----------------------------------------------------------------------------
+# CLI
+# -----------------------------------------------------------------------------
+
+def _setup_logging(verbose: bool) -> None:
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
+
+
+def cmd_simulate(args: argparse.Namespace) -> int:
+    """Run in-memory simulation: set genesis, advance time, log grabs, open/close deals."""
+    sim = TroySimulator()
+    if args.genesis:
+        sim.config = sim.config.with_genesis(args.genesis)
+    sim.set_block_time(args.block or 0, args.timestamp or sim.config.genesis_time or 1000)
+    for i in range(args.grabs or 0):
+        try:
+            gid = sim.log_grab(args.intensity_bps or 5000, sim.config.commander)
+            logging.info("logged grab id=%s intensity_bps=%s", gid, args.intensity_bps)
+        except TroyError as e:
+            logging.warning("log_grab failed: %s", e)
+    if args.deals:
+        for i in range(args.deals):
+            try:
+                did = sim.open_deal(args.party or sim.config.treasury, args.deal_amount or 1 * 10**18, sim.config.deal_maker)
+                logging.info("opened deal id=%s", did)
+            except TroyError as e:
+                logging.warning("open_deal failed: %s", e)
+    print(json.dumps({
+        "nextGrabId": sim.next_grab_id(),
+        "nextDealId": sim.next_deal_id(),
+        "nextSlotIndex": sim.next_slot_index(),
+        "totalSweptWei": str(sim.total_swept_wei()),
+        "vaultBalanceWei": str(sim.vault_balance_wei()),
+    }, indent=2))
+    return 0
+
+
+def cmd_encode(args: argparse.Namespace) -> int:
+    """Encode calldata for a function."""
