@@ -1198,3 +1198,78 @@ def remaining_sweep_cap(total_swept_wei: int, sweep_cap_wei: int) -> int:
 
 
 def epoch_start_time(genesis_time: int, epoch_id: int, duration_secs: int = YUGEAI_EPOCH_DURATION_SECS) -> int:
+    """Return epoch start timestamp."""
+    return genesis_time + epoch_id * duration_secs
+
+
+def grabs_remaining_in_epoch(next_grab_id: int, epoch_id: int) -> int:
+    """Grabs remaining in the given epoch before hitting MAX_GRABS_PER_EPOCH."""
+    start = epoch_id * YUGEAI_MAX_GRABS_PER_EPOCH
+    used = next_grab_id - start
+    if used < 0:
+        return YUGEAI_MAX_GRABS_PER_EPOCH
+    return max(0, YUGEAI_MAX_GRABS_PER_EPOCH - used)
+
+
+def intensity_tier_bounds(tier: int) -> Tuple[int, int]:
+    """Return (min_bps, max_bps) for tier 0-3."""
+    if tier == 0:
+        return (0, 999)
+    if tier == 1:
+        return (1000, 4999)
+    if tier == 2:
+        return (5000, 7999)
+    return (8000, 10000)
+
+
+def format_wei(wei_val: int) -> str:
+    """Format wei as string for display."""
+    return str(wei_val)
+
+
+def parse_wei(s: str) -> int:
+    """Parse wei from string."""
+    return int(s)
+
+
+def constants_summary() -> Dict[str, Any]:
+    """Return a dict of Troy/YugeAI constants for reference."""
+    return {
+        "YUGEAI_BPS": YUGEAI_BPS,
+        "YUGEAI_MAX_GRABS_PER_EPOCH": YUGEAI_MAX_GRABS_PER_EPOCH,
+        "YUGEAI_EPOCH_DURATION_SECS": YUGEAI_EPOCH_DURATION_SECS,
+        "YUGEAI_TREASURY_SWEEP_CAP_WEI": str(YUGEAI_TREASURY_SWEEP_CAP_WEI),
+        "YUGEAI_MIN_GRAB_BPS": YUGEAI_MIN_GRAB_BPS,
+        "YUGEAI_MAX_GRAB_BPS": YUGEAI_MAX_GRAB_BPS,
+        "YUGEAI_WINNING_INTENSITY_THRESHOLD_BPS": YUGEAI_WINNING_INTENSITY_THRESHOLD_BPS,
+        "YUGEAI_PROTOCOL_REV": YUGEAI_PROTOCOL_REV,
+        "TROY_NAMESPACE": TROY_NAMESPACE,
+    }
+
+
+def cmd_constants(args: argparse.Namespace) -> int:
+    """Print constants summary as JSON."""
+    print(json.dumps(constants_summary(), indent=2))
+    return 0
+
+
+def _add_extra_commands(sub: Any) -> None:
+    p_dump = sub.add_parser("dump", help="Dump simulator state to JSON")
+    p_dump.add_argument("--genesis", type=int)
+    p_dump.add_argument("--block", type=int)
+    p_dump.add_argument("--timestamp", type=int)
+    p_dump.add_argument("--grabs", type=int, default=0)
+    p_dump.add_argument("--intensity-bps", type=int)
+    p_dump.set_defaults(func=cmd_dump)
+    p_load = sub.add_parser("load", help="Load state from JSON file")
+    p_load.add_argument("file", type=str)
+    p_load.set_defaults(func=cmd_load)
+    p_val = sub.add_parser("validate", help="Validate address or intensity")
+    p_val.add_argument("--address", type=str)
+    p_val.add_argument("--intensity-bps", type=int)
+    p_val.set_defaults(func=cmd_validate)
+    p_srv = sub.add_parser("serve", help="Run HTTP API server")
+    p_srv.add_argument("--host", type=str, default="127.0.0.1")
+    p_srv.add_argument("--port", type=int, default=8765)
+    p_srv.set_defaults(func=lambda a: run_server(a.host, a.port) or 0)
+
