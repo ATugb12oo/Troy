@@ -148,3 +148,78 @@ class UnauthorizedError(TroyError):
 
 class DealNotActiveError(TroyError):
     """Raised when deal is not active."""
+    pass
+
+
+# -----------------------------------------------------------------------------
+# Enums and data types
+# -----------------------------------------------------------------------------
+
+class GrabTier(enum.IntEnum):
+    TIER_0 = 0  # 0-999 bps
+    TIER_1 = 1  # 1000-4999
+    TIER_2 = 2  # 5000-7999
+    TIER_3 = 3  # 8000-10000
+
+
+class DealState(enum.IntEnum):
+    NONE = 0
+    ACTIVE = 1
+    CLOSED = 2
+
+
+@dataclass(frozen=True)
+class GrabRecord:
+    intensity_bps: int
+    logged_at: int
+    epoch_id: int
+    finalized: bool
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "intensityBps": self.intensity_bps,
+            "loggedAt": self.logged_at,
+            "epochId": self.epoch_id,
+            "finalized": self.finalized,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> GrabRecord:
+        return cls(
+            intensity_bps=int(d.get("intensityBps", d.get("intensity_bps", 0))),
+            logged_at=int(d.get("loggedAt", d.get("logged_at", 0))),
+            epoch_id=int(d.get("epochId", d.get("epoch_id", 0))),
+            finalized=bool(d.get("finalized", False)),
+        )
+
+
+@dataclass(frozen=True)
+class DealSlot:
+    amount_wei: int
+    created_at_block: int
+    closed_at_block: int
+    party: str
+    active: bool
+    closed: bool
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "amountWei": self.amount_wei,
+            "createdAtBlock": self.created_at_block,
+            "closedAtBlock": self.closed_at_block,
+            "party": self.party,
+            "active": self.active,
+            "closed": self.closed,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> DealSlot:
+        return cls(
+            amount_wei=int(d.get("amountWei", d.get("amount_wei", 0))),
+            created_at_block=int(d.get("createdAtBlock", d.get("created_at_block", 0))),
+            closed_at_block=int(d.get("closedAtBlock", d.get("closed_at_block", 0))),
+            party=str(d.get("party", "")),
+            active=bool(d.get("active", False)),
+            closed=bool(d.get("closed", False)),
+        )
+
