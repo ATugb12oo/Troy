@@ -373,3 +373,78 @@ def encode_close_deal(deal_id: int) -> bytes:
 def encode_seal_slot(slot_index: int, variant_id: int, band_bps: int) -> bytes:
     """Encode calldata for sealSlot(uint256,uint64,uint88)."""
     return (
+        bytes.fromhex(SELECTOR_SEAL_SLOT[2:].zfill(8))
+        + encode_uint256(slot_index)
+        + encode_uint256(variant_id)
+        + encode_uint256(band_bps)
+    )
+
+
+def encode_set_covfefe(key: bytes, value: bytes) -> bytes:
+    """Encode calldata for setCovfefe(bytes32,bytes32)."""
+    return (
+        bytes.fromhex(SELECTOR_SET_COVFEFE[2:].zfill(8))
+        + encode_bytes32(key)
+        + encode_bytes32(value)
+    )
+
+
+def encode_claim_big_league(claim_index: int) -> bytes:
+    """Encode calldata for claimBigLeague(uint256)."""
+    return bytes.fromhex(SELECTOR_CLAIM_BIG_LEAGUE[2:].zfill(8)) + encode_uint256(claim_index)
+
+
+def encode_sweep_treasury(to: Union[str, bytes], amount_wei: int) -> bytes:
+    """Encode calldata for sweepTreasury(address,uint256)."""
+    return (
+        bytes.fromhex(SELECTOR_SWEEP_TREASURY[2:].zfill(8))
+        + encode_address(to)
+        + encode_uint256(amount_wei)
+    )
+
+
+def encode_set_guard_paused(paused: bool) -> bytes:
+    """Encode calldata for setGuardPaused(bool)."""
+    return bytes.fromhex(SELECTOR_SET_GUARD_PAUSED[2:].zfill(8)) + encode_bool(paused)
+
+
+def encode_set_claim_reward(claim_index: int, reward_wei: int) -> bytes:
+    """Encode calldata for setClaimReward(uint256,uint256)."""
+    return (
+        bytes.fromhex(SELECTOR_SET_CLAIM_REWARD[2:].zfill(8))
+        + encode_uint256(claim_index)
+        + encode_uint256(reward_wei)
+    )
+
+
+def encode_set_keeper_authorization(keeper: Union[str, bytes], authorized: bool) -> bytes:
+    """Encode calldata for setKeeperAuthorization(address,bool)."""
+    return (
+        bytes.fromhex(SELECTOR_SET_KEEPER_AUTH[2:].zfill(8))
+        + encode_address(keeper)
+        + encode_bool(authorized)
+    )
+
+
+def encode_record_epoch_snapshot(epoch_id: int) -> bytes:
+    """Encode calldata for recordEpochSnapshot(uint256)."""
+    return bytes.fromhex(SELECTOR_RECORD_EPOCH_SNAPSHOT[2:].zfill(8)) + encode_uint256(epoch_id)
+
+
+def decode_grab_result(data: bytes) -> Tuple[int, int, int, bool]:
+    """Decode getGrab(uint256) return: intensityBps, loggedAt, epochId, finalized."""
+    if len(data) < 128:
+        raise ValueError("getGrab return data too short")
+    intensity_bps = int.from_bytes(data[0:32], "big")
+    logged_at = int.from_bytes(data[32:64], "big")
+    epoch_id = int.from_bytes(data[64:96], "big")
+    finalized = int.from_bytes(data[96:128], "big") != 0
+    return (intensity_bps, logged_at, epoch_id, finalized)
+
+
+def decode_deal_result(data: bytes) -> Tuple[int, int, int, str, bool, bool]:
+    """Decode getDeal(uint256) return: amountWei, createdAtBlock, closedAtBlock, party, active, closed."""
+    if len(data) < 192:
+        raise ValueError("getDeal return data too short")
+    amount_wei = int.from_bytes(data[0:32], "big")
+    created_at = int.from_bytes(data[32:64], "big")
