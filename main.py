@@ -898,3 +898,78 @@ def main() -> int:
     p_sim.add_argument("--deal-amount", type=int, help="Deal amount in wei")
     p_sim.set_defaults(func=cmd_simulate)
     # encode
+    p_enc = sub.add_parser("encode", help="Encode calldata")
+    p_enc.add_argument("func", type=str, help="Function name")
+    p_enc.add_argument("--intensity-bps", type=int)
+    p_enc.add_argument("--party", type=str)
+    p_enc.add_argument("--amount-wei", type=str)
+    p_enc.add_argument("--deal-id", type=int)
+    p_enc.add_argument("--slot-index", type=int)
+    p_enc.add_argument("--variant-id", type=int)
+    p_enc.add_argument("--band-bps", type=int)
+    p_enc.add_argument("--claim-index", type=int)
+    p_enc.add_argument("--reward-wei", type=str)
+    p_enc.add_argument("--to", type=str)
+    p_enc.add_argument("--paused", type=str)
+    p_enc.add_argument("--keeper", type=str)
+    p_enc.add_argument("--authorized", type=str)
+    p_enc.add_argument("--epoch-id", type=int)
+    p_enc.set_defaults(func=cmd_encode)
+    # epoch
+    p_ep = sub.add_parser("epoch", help="Compute epoch at timestamp")
+    p_ep.add_argument("--genesis", type=int, required=True)
+    p_ep.add_argument("--timestamp", type=int, required=True)
+    p_ep.set_defaults(func=cmd_epoch)
+    # tier
+    p_tier = sub.add_parser("tier", help="Tier from intensity bps")
+    p_tier.add_argument("--intensity-bps", type=int, required=True)
+    p_tier.set_defaults(func=cmd_tier)
+    # config
+    p_cfg = sub.add_parser("config", help="Show config")
+    p_cfg.add_argument("--genesis", type=int)
+    p_cfg.add_argument("--env", action="store_true", help="Output as env vars")
+    p_cfg.set_defaults(func=cmd_config)
+    # global
+    parser.add_argument("-v", "--verbose", action="store_true")
+    args = parser.parse_args()
+    _setup_logging(args.verbose)
+    return args.func(args)
+
+
+# -----------------------------------------------------------------------------
+# Validation helpers
+# -----------------------------------------------------------------------------
+
+def validate_address(addr: str) -> bool:
+    """Check if string looks like a 40-char hex address."""
+    a = addr.strip()
+    if a.startswith("0x"):
+        a = a[2:]
+    if len(a) != 40:
+        return False
+    try:
+        int(a, 16)
+        return True
+    except ValueError:
+        return False
+
+
+def validate_intensity_bps(bps: int) -> bool:
+    return YUGEAI_MIN_GRAB_BPS <= bps <= YUGEAI_MAX_GRAB_BPS
+
+
+def validate_epoch_id(epoch_id: int, genesis_time: int, current_ts: int) -> bool:
+    max_epoch = (current_ts - genesis_time) // YUGEAI_EPOCH_DURATION_SECS
+    return 0 <= epoch_id <= max_epoch
+
+
+def validate_slot_index(slot_index: int, next_slot_index: int) -> bool:
+    return 0 <= slot_index < next_slot_index
+
+
+def validate_grab_id(grab_id: int, next_grab_id: int) -> bool:
+    return 0 <= grab_id < next_grab_id
+
+
+def validate_deal_id(deal_id: int, next_deal_id: int) -> bool:
+    return 0 <= deal_id < next_deal_id
