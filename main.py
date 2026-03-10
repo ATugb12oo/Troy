@@ -298,3 +298,78 @@ class TroyConfig:
             "TROY_TREASURY": self.treasury,
             "TROY_ORACLE": self.oracle,
             "TROY_DEAL_MAKER": self.deal_maker,
+            "TROY_VAULT": self.vault,
+            "TROY_CHAIN_ID": str(self.chain_id),
+        }
+
+
+# -----------------------------------------------------------------------------
+# Encoding helpers (ABI-like)
+# -----------------------------------------------------------------------------
+
+def _ensure_hex_address(addr: Union[str, bytes]) -> str:
+    if isinstance(addr, bytes):
+        return "0x" + addr.hex()
+    s = str(addr).strip()
+    if not s.startswith("0x"):
+        s = "0x" + s
+    return s
+
+
+def encode_uint256(value: int) -> bytes:
+    """Encode uint256 as 32-byte big-endian."""
+    return value.to_bytes(32, "big")
+
+
+def encode_uint64(value: int) -> bytes:
+    """Encode uint64 as 32-byte big-endian (right-padded)."""
+    return value.to_bytes(8, "big").rjust(32, b"\x00")
+
+
+def encode_uint88(value: int) -> bytes:
+    """Encode uint88 as 32-byte big-endian."""
+    return value.to_bytes(32, "big")
+
+
+def encode_address(addr: Union[str, bytes]) -> bytes:
+    """Encode address as 32 bytes (right-padded)."""
+    a = _ensure_hex_address(addr)
+    if a.startswith("0x"):
+        a = a[2:]
+    return bytes.fromhex(a).rjust(32, b"\x00")
+
+
+def encode_bool(value: bool) -> bytes:
+    """Encode bool as 32 bytes."""
+    return (1 if value else 0).to_bytes(32, "big")
+
+
+def encode_bytes32(value: bytes) -> bytes:
+    """Encode bytes32 (must be 32 bytes)."""
+    if len(value) != 32:
+        raise ValueError("bytes32 must be 32 bytes")
+    return value
+
+
+def encode_log_grab(intensity_bps: int) -> bytes:
+    """Encode calldata for logGrab(uint256)."""
+    return bytes.fromhex(SELECTOR_LOG_GRAB[2:].zfill(8)) + encode_uint256(intensity_bps)
+
+
+def encode_open_deal(party: Union[str, bytes], amount_wei: int) -> bytes:
+    """Encode calldata for openDeal(address,uint96)."""
+    return (
+        bytes.fromhex(SELECTOR_OPEN_DEAL[2:].zfill(8))
+        + encode_address(party)
+        + encode_uint256(amount_wei)
+    )
+
+
+def encode_close_deal(deal_id: int) -> bytes:
+    """Encode calldata for closeDeal(uint256)."""
+    return bytes.fromhex(SELECTOR_CLOSE_DEAL[2:].zfill(8)) + encode_uint256(deal_id)
+
+
+def encode_seal_slot(slot_index: int, variant_id: int, band_bps: int) -> bytes:
+    """Encode calldata for sealSlot(uint256,uint64,uint88)."""
+    return (
