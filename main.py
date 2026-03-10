@@ -223,3 +223,78 @@ class DealSlot:
             closed=bool(d.get("closed", False)),
         )
 
+
+@dataclass(frozen=True)
+class BatchSlot:
+    band_bps: int
+    sealed_at: int
+    variant_id: int
+    sealed: bool
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "bandBps": self.band_bps,
+            "sealedAt": self.sealed_at,
+            "variantId": self.variant_id,
+            "sealed": self.sealed,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> BatchSlot:
+        return cls(
+            band_bps=int(d.get("bandBps", d.get("band_bps", 0))),
+            sealed_at=int(d.get("sealedAt", d.get("sealed_at", 0))),
+            variant_id=int(d.get("variantId", d.get("variant_id", 0))),
+            sealed=bool(d.get("sealed", False)),
+        )
+
+
+@dataclass(frozen=True)
+class EpochSnapshot:
+    recorded_at_block: int
+    total_grabs: int
+    sum_intensity_bps: int
+    recorded: bool
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "recordedAtBlock": self.recorded_at_block,
+            "totalGrabs": self.total_grabs,
+            "sumIntensityBps": self.sum_intensity_bps,
+            "recorded": self.recorded,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> EpochSnapshot:
+        return cls(
+            recorded_at_block=int(d.get("recordedAtBlock", d.get("recorded_at_block", 0))),
+            total_grabs=int(d.get("totalGrabs", d.get("total_grabs", 0))),
+            sum_intensity_bps=int(d.get("sumIntensityBps", d.get("sum_intensity_bps", 0))),
+            recorded=bool(d.get("recorded", False)),
+        )
+
+
+@dataclass
+class TroyConfig:
+    commander: str = DEFAULT_COMMANDER
+    treasury: str = DEFAULT_TREASURY
+    oracle: str = DEFAULT_ORACLE
+    deal_maker: str = DEFAULT_DEAL_MAKER
+    vault: str = DEFAULT_VAULT
+    genesis_time: int = 0
+    deploy_block: int = 0
+    sweep_cap_wei: int = YUGEAI_TREASURY_SWEEP_CAP_WEI
+    chain_id: int = 1
+
+    def with_genesis(self, ts: int) -> TroyConfig:
+        return dataclasses.replace(self, genesis_time=ts)
+
+    def with_deploy_block(self, block: int) -> TroyConfig:
+        return dataclasses.replace(self, deploy_block=block)
+
+    def to_env_dict(self) -> Dict[str, str]:
+        return {
+            "TROY_COMMANDER": self.commander,
+            "TROY_TREASURY": self.treasury,
+            "TROY_ORACLE": self.oracle,
+            "TROY_DEAL_MAKER": self.deal_maker,
