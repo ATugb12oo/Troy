@@ -598,3 +598,78 @@ class TroySimulator:
             active=True,
             closed=False,
         )
+        return deal_id
+
+    def close_deal(self, deal_id: int, caller: str) -> None:
+        if caller != self.config.deal_maker:
+            raise NotDealMakerError()
+        if self._reentrancy_lock != 0:
+            raise ReentrantError()
+        d = self._deals.get(deal_id)
+        if not d or not d.active or d.closed:
+            raise DealNotActiveError()
+        self._deals[deal_id] = DealSlot(
+            amount_wei=d.amount_wei,
+            created_at_block=d.created_at_block,
+            closed_at_block=self._block_number,
+            party=d.party,
+            active=False,
+            closed=True,
+        )
+
+    def get_deal(self, deal_id: int) -> Optional[DealSlot]:
+        return self._deals.get(deal_id)
+
+    def reserve_slot(self, caller: str) -> int:
+        if not self._authorized_keepers.get(caller, False):
+            raise UnauthorizedError()
+        epoch_end = epoch_end_time(self.config.genesis_time, self._current_epoch)
+        if self._timestamp >= epoch_end:
+            self._current_epoch += 1
+        slots_used = self._next_slot_index - self._current_epoch * YUGEAI_MAX_GRABS_PER_EPOCH
+        if slots_used >= YUGEAI_MAX_GRABS_PER_EPOCH:
+            self._current_epoch += 1
+            slots_used = self._next_slot_index - self._current_epoch * YUGEAI_MAX_GRABS_PER_EPOCH
+        if slots_used >= YUGEAI_MAX_GRABS_PER_EPOCH:
+            raise InvalidSlotError()
+        slot_index = self._next_slot_index
+        self._next_slot_index += 1
+        self._slots[slot_index] = BatchSlot(band_bps=0, sealed_at=0, variant_id=0, sealed=False)
+        return slot_index
+
+    def seal_slot(self, slot_index: int, variant_id: int, band_bps: int, caller: str) -> None:
+        if caller != self.config.commander:
+            raise NotCommanderError()
+        if slot_index >= self._next_slot_index:
+            raise InvalidSlotError()
+        s = self._slots[slot_index]
+        if s.sealed:
+            raise SlotAlreadySealedError()
+        self._slots[slot_index] = BatchSlot(
+            band_bps=band_bps,
+            sealed_at=self._timestamp,
+            variant_id=variant_id,
+            sealed=True,
+        )
+
+    def get_slot(self, slot_index: int) -> Optional[BatchSlot]:
+        return self._slots.get(slot_index)
+
+    def set_covfefe(self, key: bytes, value: bytes, caller: str) -> None:
+        if caller != self.config.oracle:
+            raise NotOracleError()
+        if self._block_number < self._last_oracle_block + YUGEAI_ORACLE_COOLDOWN_BLOCKS:
+            raise OracleCooldownError()
+        self._last_oracle_block = self._block_number
+        self._covfefe_store[key] = value
+        self._covfefe_updated_block[key] = self._block_number
+
+    def get_covfefe(self, key: bytes) -> Tuple[bytes, int]:
+        return (self._covfefe_store.get(key, b"\x00" * 32), self._covfefe_updated_block.get(key, 0))
+
+    def set_claim_reward(self, claim_index: int, reward_wei: int, caller: str) -> None:
+        if caller != self.config.commander:
+            raise NotCommanderError()
+        self._claim_rewards[claim_index] = reward_wei
+
+    def claim_big_league(self, claim_index: int, claimant: str) -> int:
