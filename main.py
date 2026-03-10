@@ -73,3 +73,78 @@ class TroyError(Exception):
 
 class NotCommanderError(TroyError):
     """Raised when caller is not the commander."""
+    pass
+
+
+class NotTreasuryError(TroyError):
+    """Raised when caller is not the treasury."""
+    pass
+
+
+class NotOracleError(TroyError):
+    """Raised when caller is not the covfefe oracle."""
+    pass
+
+
+class NotDealMakerError(TroyError):
+    """Raised when caller is not the deal maker."""
+    pass
+
+
+class GuardPausedError(TroyError):
+    """Raised when contract is paused."""
+    pass
+
+
+class ReentrantError(TroyError):
+    """Raised on reentrancy attempt."""
+    pass
+
+
+class InvalidGrabIdError(TroyError):
+    """Raised when grab or claim index is invalid."""
+    pass
+
+
+class SweepOverCapError(TroyError):
+    """Raised when sweep would exceed cap."""
+    pass
+
+
+class ZeroAmountError(TroyError):
+    """Raised when amount or address is zero."""
+    pass
+
+
+class InvalidSlotError(TroyError):
+    """Raised when slot index is invalid."""
+    pass
+
+
+class SlotAlreadySealedError(TroyError):
+    """Raised when slot is already sealed."""
+    pass
+
+
+class BadInputError(TroyError):
+    """Raised on invalid input."""
+    pass
+
+
+class LimitReachedError(TroyError):
+    """Raised when a limit is reached."""
+    pass
+
+
+class OracleCooldownError(TroyError):
+    """Raised when oracle update is in cooldown."""
+    pass
+
+
+class UnauthorizedError(TroyError):
+    """Raised when caller is not authorized keeper."""
+    pass
+
+
+class DealNotActiveError(TroyError):
+    """Raised when deal is not active."""
