@@ -448,3 +448,78 @@ def decode_deal_result(data: bytes) -> Tuple[int, int, int, str, bool, bool]:
         raise ValueError("getDeal return data too short")
     amount_wei = int.from_bytes(data[0:32], "big")
     created_at = int.from_bytes(data[32:64], "big")
+    closed_at = int.from_bytes(data[64:96], "big")
+    party = "0x" + data[96:128][-20:].hex()
+    active = int.from_bytes(data[128:160], "big") != 0
+    closed = int.from_bytes(data[160:192], "big") != 0
+    return (amount_wei, created_at, closed_at, party, active, closed)
+
+
+# -----------------------------------------------------------------------------
+# Epoch and tier helpers
+# -----------------------------------------------------------------------------
+
+def epoch_at(genesis_time: int, timestamp: int, epoch_secs: int = YUGEAI_EPOCH_DURATION_SECS) -> int:
+    """Return epoch index for given timestamp."""
+    if timestamp < genesis_time:
+        return 0
+    return (timestamp - genesis_time) // epoch_secs
+
+
+def epoch_end_time(genesis_time: int, epoch_id: int, duration_secs: int = YUGEAI_EPOCH_DURATION_SECS) -> int:
+    """Return epoch end timestamp."""
+    return genesis_time + (epoch_id + 1) * duration_secs
+
+
+def clamp_intensity_bps(bps: int, min_bps: int = YUGEAI_MIN_GRAB_BPS, max_bps: int = YUGEAI_MAX_GRAB_BPS) -> int:
+    """Clamp intensity to [min_bps, max_bps]."""
+    if bps < min_bps:
+        return min_bps
+    return min(bps, max_bps)
+
+
+def tier_from_intensity(intensity_bps: int) -> int:
+    """Return tier 0-3 from intensity bps."""
+    if intensity_bps >= 8000:
+        return 3
+    if intensity_bps >= 5000:
+        return 2
+    if intensity_bps >= 1000:
+        return 1
+    return 0
+
+
+def is_winning_intensity(intensity_bps: int, threshold_bps: int = YUGEAI_WINNING_INTENSITY_THRESHOLD_BPS) -> bool:
+    """Return true if intensity meets winning threshold."""
+    return intensity_bps >= threshold_bps
+
+
+def bps_to_wei(wei_total: int, bps: int) -> int:
+    """Compute (wei_total * bps) / 10000."""
+    return (wei_total * bps) // YUGEAI_BPS
+
+
+# -----------------------------------------------------------------------------
+# In-memory simulator
+# -----------------------------------------------------------------------------
+
+@dataclass
+class SimulatedGrab:
+    grab_id: int
+    record: GrabRecord
+
+
+@dataclass
+class SimulatedDeal:
+    deal_id: int
+    slot: DealSlot
+
+
+@dataclass
+class SimulatedSlot:
+    slot_index: int
+    batch_slot: BatchSlot
+
+
+class TroySimulator:
+    """In-memory simulator for YugeAI / Troy logic (big-league grabs, deals, covfefe, vault)."""
