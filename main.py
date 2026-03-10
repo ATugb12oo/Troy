@@ -1048,3 +1048,78 @@ def cmd_dump(args: argparse.Namespace) -> int:
     sim.set_block_time(args.block or 0, args.timestamp or sim.config.genesis_time or 1000)
     for i in range(args.grabs or 0):
         try:
+            sim.log_grab(args.intensity_bps or 5000, sim.config.commander)
+        except TroyError:
+            pass
+    out = dump_simulator_state(sim)
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def cmd_load(args: argparse.Namespace) -> int:
+    """Load state from JSON file and print summary."""
+    with open(args.file, "r") as f:
+        data = json.load(f)
+    sim = load_simulator_state(data)
+    print(json.dumps({
+        "nextGrabId": sim.next_grab_id(),
+        "nextDealId": sim.next_deal_id(),
+        "nextSlotIndex": sim.next_slot_index(),
+        "totalSweptWei": str(sim.total_swept_wei()),
+        "vaultBalanceWei": str(sim.vault_balance_wei()),
+        "guardPaused": sim._guard_paused,
+    }, indent=2))
+    return 0
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """Validate address or intensity."""
+    if args.address:
+        ok = validate_address(args.address)
+        print(json.dumps({"valid": ok}))
+    elif args.intensity_bps is not None:
+        ok = validate_intensity_bps(args.intensity_bps)
+        print(json.dumps({"valid": ok}))
+    else:
+        print("Specify --address or --intensity-bps", file=sys.stderr)
+        return 1
+    return 0
+
+
+# -----------------------------------------------------------------------------
+# HTTP API (optional)
+# -----------------------------------------------------------------------------
+
+def run_server(host: str = "127.0.0.1", port: int = 8765) -> None:
+    """Run a minimal Flask API for Troy (grabs, deals, config, encode)."""
+    try:
+        from flask import Flask, request, jsonify
+    except ImportError:
+        logging.warning("Flask not installed; server disabled. pip install flask")
+        return
+    app = Flask("Troy")
+    sim = TroySimulator()
+    sim.set_block_time(1000, 100000)
+
+    @app.route("/health")
+    def health():
+        return jsonify({"status": "ok", "app": "Troy"})
+
+    @app.route("/config")
+    def get_config():
+        return jsonify(dataclasses.asdict(sim.config))
+
+    @app.route("/stats")
+    def stats():
+        return jsonify({
+            "nextGrabId": sim.next_grab_id(),
+            "nextDealId": sim.next_deal_id(),
+            "nextSlotIndex": sim.next_slot_index(),
+            "totalSweptWei": str(sim.total_swept_wei()),
+            "vaultBalanceWei": str(sim.vault_balance_wei()),
+            "guardPaused": sim._guard_paused,
+        })
+
+    @app.route("/encode/<func>", methods=["POST"])
+    def encode_api(func: str):
+        j = request.get_json() or {}
